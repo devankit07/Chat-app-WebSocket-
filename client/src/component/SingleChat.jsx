@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
 import { Container, TextField, Button, Stack, Typography } from "@mui/material";
+import { socket } from "../socket";
 
-const socket = io("http://localhost:3000");
-
-const SingleChat = () => {
+const SingleChat = ({ myName = "" }) => {
   const [myId, setMyId] = useState("");
   const [targetId, setTargetId] = useState("");
+  const [targetName, setTargetName] = useState("");
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState([]); // [{ id, name }, ...]
 
   const sendMessage = () => {
     if (!targetId || !message) return;
@@ -23,74 +22,98 @@ const SingleChat = () => {
   };
 
   useEffect(() => {
-    // jab connect ho tab apna id set karo
-    socket.on("connect", () => {
-      setMyId(socket.id);
-    });
+    const onConnect = () => {
+      setMyId(socket.id || "");
+      socket.emit("request-users-list");
+    };
 
-    // users list server se lo
-    socket.on("users-list", (allUsers) => {
-      // apna id remove kar do list se
-      const filtered = allUsers.filter((id) => id !== socket.id);
+    socket.on("connect", onConnect);
+
+    // If already connected (e.g. component mounted after connect), set ID and request list
+    if (socket.connected && socket.id) {
+      setMyId(socket.id);
+      socket.emit("request-users-list");
+    }
+
+    socket.on("users-list", (list) => {
+      const items = Array.isArray(list) ? list : [];
+      const filtered = items
+        .filter((u) => u && u.id !== socket.id && u.name)
+        .map((u) => ({ id: u.id, name: u.name }));
       setUsers(filtered);
     });
 
-    // receive private message
+    // Only receiver gets this event; never add sent messages on sender side
     socket.on("receive-private-message", (data) => {
       setMessages((prev) => [...prev, data]);
     });
 
     return () => {
-      socket.off("connect");
+      socket.off("connect", onConnect);
       socket.off("users-list");
       socket.off("receive-private-message");
     };
   }, []);
 
+  const selectUser = (id, name) => {
+    setTargetId(id);
+    setTargetName(name || id);
+  };
+
   return (
-    <Container>
-      <Typography variant="h6">Single Chat</Typography>
-
-      <Typography variant="body1" sx={{ mt: 2 }}>
-        <b>My ID:</b> {myId}
+    <Container className="single-chat" sx={{ maxWidth: "720px" }}>
+      <Typography variant="h6" className="single-chat-title">
+        Single Chat
       </Typography>
 
-      <Typography variant="body2" sx={{ mt: 2 }}>
-        Available Users:
+      <Typography variant="body1" className="you-label" sx={{ mt: 2 }}>
+        <b>You:</b> {myName || "(set your name above)"}
       </Typography>
 
-      {users.map((id) => (
-        <Typography
-          key={id}
-          sx={{ cursor: "pointer", color: "blue" }}
-          onClick={() => setTargetId(id)}
-        >
-          {id}
-        </Typography>
-      ))}
+      <Typography variant="body2" className="available-label" sx={{ mt: 2 }}>
+        <b>Available users:</b> {users.length === 0 && myId ? " (none yet)" : ""}
+      </Typography>
+      <Stack className="user-pills" direction="row" flexWrap="wrap" gap={1} sx={{ mt: 0.5 }}>
+        {users.map((u) => (
+          <span
+            key={u.id}
+            className={`user-pill ${targetId === u.id ? "selected" : ""}`}
+            onClick={() => selectUser(u.id, u.name)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && selectUser(u.id, u.name)}
+          >
+            {u.name}
+          </span>
+        ))}
+      </Stack>
 
-      <Typography sx={{ mt: 1 }}>
-        <b>Selected:</b> {targetId}
+      <Typography className="chatting-with" sx={{ mt: 1 }}>
+        <b>Chatting with:</b> {targetName || "(select a user above)"}
       </Typography>
 
       <Stack direction="row" spacing={2} mt={2}>
         <TextField
+          className="message-input"
           fullWidth
           label="Message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
-        <Button variant="contained" onClick={sendMessage}>
+        <Button className="btn-send" variant="contained" onClick={sendMessage}>
           Send
         </Button>
       </Stack>
 
-      <div style={{ marginTop: "20px" }}>
-        {messages.map((msg, i) => (
-          <Typography key={i}>
-            <b>{msg.sender}</b> : {msg.message}
-          </Typography>
-        ))}
+      <div className="messages-area">
+        {messages
+          .filter((msg) => msg.sender !== socket.id)
+          .map((msg, i) => (
+            <div key={i} className="message-row">
+              <div className="sender">{msg.senderName ?? msg.sender}</div>
+              <div className="body">{msg.message}</div>
+            </div>
+          ))}
       </div>
     </Container>
   );

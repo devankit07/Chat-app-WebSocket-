@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
 import { Container, TextField, Button, Stack, Typography } from "@mui/material";
-
-const socket = io("http://localhost:3000");
+import { socket } from "../socket";
 
 const GroupChat = () => {
   const [room, setRoom] = useState("");
@@ -27,22 +25,39 @@ const GroupChat = () => {
   }, []);
 
   return (
-    <Container>
-      <Typography variant="h6">Group Chat</Typography>
+    <Container className="group-chat" sx={{ maxWidth: "720px" }}>
+      <Typography variant="h6" className="group-chat-title">
+        Group Chat
+      </Typography>
 
-      <Stack direction="row" spacing={2} mb={2}>
-        <TextField label="Room" value={room} onChange={(e) => setRoom(e.target.value)} />
-        <Button variant="contained" onClick={joinRoom}>Join</Button>
+      <Stack className="room-row" direction="row" spacing={2} mb={2}>
+        <TextField className="room-input" label="Room" value={room} onChange={(e) => setRoom(e.target.value)} />
+        <Button className="btn-join" variant="contained" onClick={joinRoom}>
+          Join
+        </Button>
       </Stack>
 
-      <Stack direction="row" spacing={2} mb={2}>
-        <TextField fullWidth label="Message" value={message} onChange={(e) => setMessage(e.target.value)} />
-        <Button variant="contained" onClick={sendMessage}>Send</Button>
+      <Stack className="message-input-row" direction="row" spacing={2} mb={2}>
+        <TextField
+          className="message-input"
+          fullWidth
+          label="Message"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+        />
+        <Button className="btn-send-group" variant="contained" onClick={sendMessage}>
+          Send
+        </Button>
       </Stack>
 
-      {messages.map((msg, i) => (
-        <Typography key={i}>{msg.sender} : {msg.message}</Typography>
-      ))}
+      <div className="messages-area">
+        {messages.map((msg, i) => (
+          <div key={i} className="message-row-group">
+            <div className="sender">{msg.sender}</div>
+            <div className="body">{msg.message}</div>
+          </div>
+        ))}
+      </div>
     </Container>
   );
 };

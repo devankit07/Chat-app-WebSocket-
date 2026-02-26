@@ -2,10 +2,10 @@ import Chat from "./component/Chat";
 
 const App = () => {
   return (
-    <div>
-      <Chat/>
+    <div className="chat-app-wrapper">
+      <Chat />
     </div>
-  )
-}
+  );
+};
 
 export default App

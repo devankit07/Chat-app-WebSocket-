@@ -15,13 +15,20 @@ const io = new Server(server, {
 
 app.use(cors());
 
-const users = {};
+const users = {}; // socketId -> { id, name }
+
+function getUsersList() {
+  return Object.entries(users).map(([id, u]) => ({ id, name: u.name || null }));
+}
+
+function broadcastUsersList() {
+  io.emit("users-list", getUsersList());
+}
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
-
-  users[socket.id] = socket.id;
-  io.emit("all-users", Object.keys(users));
+  users[socket.id] = { id: socket.id, name: null };
+  broadcastUsersList();
 
   // 🟢 GROUP CHAT
   socket.on("join-room", (room) => {
@@ -29,28 +36,38 @@ io.on("connection", (socket) => {
   });
 
   socket.on("group-message", ({ room, message }) => {
-    // Sender ko nahi jayega
     socket.to(room).emit("receive-group-message", {
       message,
       sender: socket.id,
     });
   });
 
-  // 🔵 SINGLE CHAT
- io.on("connection", (socket) => {
-  io.emit("users-list", Array.from(io.sockets.sockets.keys()));
+  socket.on("set-name", (name) => {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    if (trimmed) {
+      users[socket.id].name = trimmed;
+      broadcastUsersList();
+    }
+  });
 
+  // 🔵 SINGLE CHAT – private message only to receiver (not sender)
   socket.on("private-message", ({ targetId, message }) => {
+    const senderName = users[socket.id]?.name || socket.id;
     io.to(targetId).emit("receive-private-message", {
       sender: socket.id,
+      senderName,
       message,
     });
   });
 
-  socket.on("disconnect", () => {
-    io.emit("users-list", Array.from(io.sockets.sockets.keys()));
+  socket.on("request-users-list", () => {
+    socket.emit("users-list", getUsersList());
   });
-});
+
+  socket.on("disconnect", () => {
+    delete users[socket.id];
+    broadcastUsersList();
+  });
 });
 
 server.listen(3000, () => {
